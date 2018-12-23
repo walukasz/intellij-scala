@@ -2,7 +2,7 @@ package org.jetbrains.plugins.scala
 package codeInsight.generation.ui
 
 import java.util
-import java.util.Collections
+import java.util.{Collections, HashMap}
 
 import com.intellij.codeInsight.CodeInsightBundle
 import com.intellij.codeInsight.generation.ui.AbstractGenerateEqualsWizard
@@ -10,7 +10,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi._
 import com.intellij.refactoring.classMembers.AbstractMemberInfoModel
 import com.intellij.refactoring.ui.AbstractMemberSelectionPanel
-import com.intellij.util.containers.HashMap
 import org.jetbrains.plugins.scala.codeInsight.generation.GenerationUtil
 import org.jetbrains.plugins.scala.lang.psi.api.toplevel.ScNamedElement
 

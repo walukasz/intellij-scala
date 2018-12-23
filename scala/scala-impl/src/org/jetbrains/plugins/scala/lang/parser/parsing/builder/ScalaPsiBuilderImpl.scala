@@ -23,7 +23,7 @@ import scala.meta.intellij.psi
 class ScalaPsiBuilderImpl(delegate: PsiBuilder)
   extends PsiBuilderAdapter(delegate) with ScalaPsiBuilder {
 
-  private val newlinesEnabled = new mutable.Stack[Boolean]
+  private val newlinesEnabled = new com.intellij.util.containers.Stack[Boolean]
 
   private lazy val maybePsiFile = Option {
     myDelegate.getUserData(FileContextUtil.CONTAINING_FILE_KEY)
@@ -55,7 +55,7 @@ class ScalaPsiBuilderImpl(delegate: PsiBuilder)
   }
 
   override final def restoreNewlinesState(): Unit = {
-    assert(newlinesEnabled.nonEmpty)
+    assert(!newlinesEnabled.empty())
     newlinesEnabled.pop()
   }
 
@@ -71,7 +71,7 @@ class ScalaPsiBuilderImpl(delegate: PsiBuilder)
   override final def isIdBindingEnabled: Boolean =
     isTestFile || maybeScalaVersion.exists(_ >= Version("2.12"))
 
-  protected final def isNewlinesEnabled: Boolean = newlinesEnabled.isEmpty || newlinesEnabled.top
+  protected final def isNewlinesEnabled: Boolean = newlinesEnabled.isEmpty || newlinesEnabled.peek()
 
   final def findPreviousNewLine: Option[String] = {
     @tailrec

@@ -9,7 +9,7 @@ import com.intellij.notification.{Notification, NotificationListener, Notificati
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.extensions.PluginId
-import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.{Project, ProjectUtil}
 import com.intellij.openapi.projectRoots.{ProjectJdkTable, Sdk}
 import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.roots.impl.OrderEntryUtil
@@ -272,9 +272,10 @@ object CompileServerLauncher {
     ApplicationManager.getApplication.saveSettings()
   }
 
+
   private def projectHome(project: Project): Option[File] = {
     for {
-      dir <- Option(project.getBaseDir)
+      dir <- Option(ProjectUtil.guessProjectDir(project))
       path <- Option(dir.getCanonicalPath)
       file = new File(path)
       if file.exists()

@@ -23,10 +23,10 @@ import scala.collection.mutable
  */
 
 class ScalaRecursiveElementVisitor extends ScalaElementVisitor {
-  private val referencesStack = new mutable.Stack[ScReferenceElement]()
+  private val referencesStack = new com.intellij.util.containers.Stack[ScReferenceElement]()
   
   override def visitElement(element: ScalaPsiElement) {
-    if (referencesStack.nonEmpty && referencesStack.top == element) {
+    if (!referencesStack.empty() && referencesStack.peek() == element) {
       referencesStack.pop()
       referencesStack.push(null)
     } else {

@@ -25,7 +25,7 @@ object InfixExpr {
 
   def parse(builder: ScalaPsiBuilder): Boolean = {
 
-    type MStack[X] = _root_.scala.collection.mutable.Stack[X]
+    type MStack[X] = com.intellij.util.containers.Stack[X]
 
     val markerStack = new MStack[PsiBuilder.Marker]
     val opStack = new MStack[String]
@@ -50,10 +50,10 @@ object InfixExpr {
           markerStack push newMarker
           exit = true
         }
-        else if (!compar(s, opStack.top, builder)) {
+        else if (!compar(s, opStack.peek(), builder)) {
           opStack.pop()
           backupMarker.drop()
-          backupMarker = markerStack.top.precede
+          backupMarker = markerStack.peek().precede
           markerStack.pop().done(ScalaElementType.INFIX_EXPR)
         }
         else {
@@ -89,14 +89,14 @@ object InfixExpr {
     }
     if (exitOf) backupMarker.drop()
     if (count > 0) {
-      while (count > 0 && markerStack.nonEmpty) {
+      while (count > 0 && !markerStack.empty()) {
         markerStack.pop().done(ScalaElementType.INFIX_EXPR)
         count -= 1
       }
 
     }
     infixMarker.drop()
-    while (markerStack.nonEmpty) {
+    while (!markerStack.empty()) {
       markerStack.pop().drop()
     }
     true

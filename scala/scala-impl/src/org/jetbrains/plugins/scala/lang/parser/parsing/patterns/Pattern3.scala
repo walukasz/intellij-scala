@@ -20,7 +20,7 @@ import org.jetbrains.plugins.scala.lang.parser.parsing.builder.ScalaPsiBuilder
 object Pattern3 {
 
   def parse(builder: ScalaPsiBuilder): Boolean = {
-    type Stack[X] = _root_.scala.collection.mutable.Stack[X]
+    type Stack[X] = com.intellij.util.containers.Stack[X]
     val markerStack = new Stack[PsiBuilder.Marker]
     val opStack = new Stack[String]
     //val infixMarker = builder.mark
@@ -43,10 +43,10 @@ object Pattern3 {
           markerStack push newMarker
           exit = true
         }
-        else if (!compar(s, opStack.top,builder)) {
+        else if (!compar(s, opStack.peek,builder)) {
           opStack.pop()
           backupMarker.drop()
-          backupMarker = markerStack.top.precede
+          backupMarker = markerStack.peek.precede
           markerStack.pop().done(ScalaElementType.INFIX_PATTERN)
         }
         else {
@@ -70,13 +70,13 @@ object Pattern3 {
     }
     backupMarker.drop()
     if (count>0) {
-      while (markerStack.nonEmpty) {
+      while (!markerStack.empty()) {
         markerStack.pop().done(ScalaElementType.INFIX_PATTERN)
       }
       //infixMarker.done(ScalaElementTypes.INFIX_PATTERN)
     }
     else {
-      while (markerStack.nonEmpty) {
+      while (!markerStack.empty()) {
         markerStack.pop().drop()
       }
       //infixMarker.drop
