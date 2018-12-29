@@ -90,8 +90,10 @@ object ScalaExpressionTypeProvider {
     s"<tr>$titleCell$contentCell</tr>"
   }
 
-  def getTypeInfoHint(e: PsiElement): Option[String] =
-    if (e.getNode.getElementType == ScalaTokenTypes.tIDENTIFIER)
+  def getTypeInfoHint(e: PsiElement): Option[String] = e.getNode.getElementType match {
+    case ScalaTokenTypes.tIDENTIFIER | ScalaTokenTypes.kIF | ScalaTokenTypes.tCHOOSE | ScalaTokenTypes.tASSIGN =>
       e.parent.flatMap(extractType).map(_.presentableText(e))
-    else None
+    case _ =>
+      None
+  }
 }
