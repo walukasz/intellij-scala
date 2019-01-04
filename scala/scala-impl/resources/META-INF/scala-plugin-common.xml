@@ -1708,6 +1708,9 @@
             <action id="ToogleLocalVariableType"
                     class="org.jetbrains.plugins.scala.codeInsight.hints.ScalaTypeHintsConfigurable$ToogleLocalVariableTypeAction"
                     text="Local variable type hints"/>
+            <action id="ToogleExpressionChainType"
+                    class="org.jetbrains.plugins.scala.codeInsight.hints.ScalaTypeHintsConfigurable$ToogleExpressionChainTypeAction"
+                    text="Expression chain type hints" />
             <action id="ToogleForObviousType"
                     class="org.jetbrains.plugins.scala.codeInsight.hints.ScalaTypeHintsConfigurable$ToogleObviousTypeAction"
                     text="Obvious types hints"/>
