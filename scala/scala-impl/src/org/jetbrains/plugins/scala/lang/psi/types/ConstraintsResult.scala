@@ -163,6 +163,16 @@ private final case class ConstraintSystemImpl(upperMap: LongMap[Set[ScType]],
     var lMap = LongMap.empty[ScType]
     var uMap = LongMap.empty[ScType]
 
+    val inferSingletonsMap = upperMap.transform((_: Long, v: Set[ScType]) => v.exists(_.equiv(Singleton)))
+
+    def getOrDefault(id: Long, map: LongMap[Set[ScType]]): Set[ScType] = {
+      val original = map.getOrDefault(id)
+
+      // @FIXME: we should really just check if tparam has singleton upper bound when adding constraints
+      if (!inferSingletonsMap.getOrElse(id, false)) original.map(ScLiteralType.widenRecursive)
+      else                                          original
+    }
+
     def solve(visited: Set[Long])
              (id: Long): Boolean = {
       if (visited.contains(id)) {
@@ -176,7 +186,7 @@ private final case class ConstraintSystemImpl(upperMap: LongMap[Set[ScType]],
           recursion(!solve(newVisited)(_) && canThrowSCE) _
         }
 
-        lowerMap.getOrDefault(id) match {
+        getOrDefault(id, lowerMap) match {
           case set if set.nonEmpty =>
             val substitutor = needTvMap(set).fold {
               tvMap += ((id, Nothing))
@@ -195,7 +205,7 @@ private final case class ConstraintSystemImpl(upperMap: LongMap[Set[ScType]],
           case _ =>
         }
 
-        upperMap.getOrDefault(id) match {
+        getOrDefault(id, upperMap) match {
           case set if set.nonEmpty =>
             val substitutor = needTvMap(set).fold {
               tvMap += ((id, Nothing))

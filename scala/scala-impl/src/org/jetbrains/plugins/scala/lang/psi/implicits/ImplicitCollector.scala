@@ -7,7 +7,7 @@ import com.intellij.psi._
 import com.intellij.psi.util.PsiTreeUtil
 import org.jetbrains.plugins.scala.caches.RecursionManager
 import org.jetbrains.plugins.scala.extensions._
-import org.jetbrains.plugins.scala.lang.macros.evaluator.{MacroContext, ScalaMacroEvaluator}
+import org.jetbrains.plugins.scala.lang.macros.evaluator.{MacroContext, MacroEvaluationError, ScalaMacroEvaluator}
 import org.jetbrains.plugins.scala.lang.psi.ScalaPsiUtil
 import org.jetbrains.plugins.scala.lang.psi.api.InferUtil
 import org.jetbrains.plugins.scala.lang.psi.api.InferUtil.SafeCheckException
@@ -301,13 +301,13 @@ class ImplicitCollector(place: PsiElement,
 
         if (isExtensionConversion && !fullInfo) {
           val applicableParameters =
-            checkFunctionByType(c, withLocalTypeInference, checkFast, noReturnType = true).isDefined
+            processAndCheckImplicitType(c, withLocalTypeInference, checkFast, noReturnType = true).isDefined
 
           if (applicableParameters)
-            checkFunctionByType(c, withLocalTypeInference, checkFast, noReturnType = false)
+            processAndCheckImplicitType(c, withLocalTypeInference, checkFast, noReturnType = false)
           else None
         }
-        else checkFunctionByType(c, withLocalTypeInference, checkFast, noReturnType = false)
+        else processAndCheckImplicitType(c, withLocalTypeInference, checkFast, noReturnType = false)
 
       case _ =>
         if (withLocalTypeInference) None //only functions may have local type inference
@@ -511,7 +511,15 @@ class ImplicitCollector(place: PsiElement,
     def compute(): Option[Candidate] = {
       val typeParameters = fun.typeParameters
       val implicitClause = fun.effectiveParameterClauses.lastOption.filter(_.isImplicit)
-      if (typeParameters.isEmpty && implicitClause.isEmpty) Some(c.copy(implicitReason = OkResult), subst)
+      if (typeParameters.isEmpty && implicitClause.isEmpty) {
+        Option(
+          c.copy(
+            implicitParameterType = Option(ret), // me might have stepped on a whitebox macro along the way
+            implicitReason        = OkResult
+          ),
+          subst
+        )
+      }
       else {
         val methodType = implicitClause.map {
           li => ScMethodType(ret, li.getSmartParameters, isImplicit = true)(place.elementScope)
@@ -588,46 +596,60 @@ class ImplicitCollector(place: PsiElement,
     }
   }
 
-  private def checkFunctionByType(
+  private def processAndCheckImplicitType(
     c:                      ScalaResolveResult,
     withLocalTypeInference: Boolean,
     checkFast:              Boolean,
     noReturnType:           Boolean
   ): Option[Candidate] = {
-    val fun = c.element.asInstanceOf[ScFunction]
+    val fun   = c.element.asInstanceOf[ScFunction]
     val subst = c.substitutor
+
+    def checkFunctionByType(
+      funTpe:          ScType,
+      depTypeReverter: ScType => ScType,
+    ): Option[Candidate] = {
+      if (isExtensionConversion && argsConformWeakly(funTpe, tp) || (funTpe conforms tp)) {
+        if (checkFast || noReturnType) Some(c, ScSubstitutor.empty)
+        else checkFunctionType(c, fun, funTpe, depTypeReverter)
+      } else if (noReturnType) Some(c, ScSubstitutor.empty)
+      else {
+        funTpe match {
+          case FunctionType(ret, params) if params.isEmpty =>
+            if (!ret.conforms(tp)) None
+            else if (checkFast) Some(c, ScSubstitutor.empty)
+            else checkFunctionType(c, fun, ret)
+          case _ =>
+            reportWrong(c, subst, TypeDoesntConformResult)
+        }
+      }
+    }
 
     val ft =
       if (noReturnType) fun.functionTypeNoImplicits(Some(Nothing))
       else fun.functionTypeNoImplicits()
 
     ft match {
-      case Some(_funType: ScType) =>
+      case Some(funType: ScType) =>
         val macroEvaluator = ScalaMacroEvaluator.getInstance(project)
-        val funType = macroEvaluator.checkMacro(fun, MacroContext(place, Some(tp))) getOrElse _funType
+        val macroContext   = MacroContext(place, Option(tp))
+        val macroChecked   = macroEvaluator.checkMacro(fun, macroContext)
 
-        val substedFunTp = substedFunType(fun, funType, subst, withLocalTypeInference, noReturnType) match {
-          case Some(t) => t
-          case None    => return None
-        }
+        val actualTpe =
+          macroChecked.fold(
+            {
+              case MacroEvaluationError.NoRuleDefined    =>
+                substedFunType(fun, funType, subst, withLocalTypeInference, noReturnType)
+              case MacroEvaluationError.MacroCheckFailed => None
+            },
+            Option(_)
+          )
 
-        val (withoutDependents, reverter) = approximateDependent(substedFunTp, fun.parameters.toSet)
-
-        if (isExtensionConversion && argsConformWeakly(substedFunTp, tp) || (withoutDependents conforms tp)) {
-          if (checkFast || noReturnType) Some(c, ScSubstitutor.empty)
-          else checkFunctionType(c, fun, withoutDependents, reverter)
-        }
-        else if (noReturnType) Some(c, ScSubstitutor.empty)
-        else {
-          substedFunTp match {
-            case FunctionType(ret, params) if params.isEmpty =>
-              if (!ret.conforms(tp)) None
-              else if (checkFast) Some(c, ScSubstitutor.empty)
-              else checkFunctionType(c, fun, ret)
-            case _ =>
-              reportWrong(c, subst, TypeDoesntConformResult)
-          }
-        }
+        for {
+          tpe                           <- actualTpe
+          (withoutDependents, reverter) = approximateDependent(tpe, fun.parameters.toSet)
+          candidate                     <- checkFunctionByType(withoutDependents, reverter)
+        } yield candidate
       case _ =>
         if (!withLocalTypeInference) reportWrong(c, subst, BadTypeResult)
         else None
@@ -653,10 +675,10 @@ class ImplicitCollector(place: PsiElement,
     import org.jetbrains.plugins.scala.lang.psi.api.statements.params._
     import scala.collection.mutable
 
-    val updates = mutable.Map.empty[UndefinedType, ScDesignatorType]
+    val updates = mutable.Map.empty[UndefinedType, ScProjectionType]
 
-    val updatedType = tpe.updateLeaves {
-      case original @ ScDesignatorType(p: ScParameter) if params.contains(p) =>
+    val updatedType = tpe.updateRecursively {
+      case original @ ScProjectionType(ScDesignatorType(p: ScParameter), _) if params.contains(p) =>
         val typeParam = TypeParameter.light(p.name ++ "$$dep", Seq.empty, Nothing, Any)
         val undef     = UndefinedType(typeParam)
         updates += (undef -> original)
@@ -735,18 +757,13 @@ class ImplicitCollector(place: PsiElement,
 
   private def argsConformWeakly(left: ScType, right: ScType): Boolean = {
     def function1Arg(scType: ScType): Option[ScType] = scType match {
-      case ParameterizedType(ScDesignatorType(c: PsiClass), args) if args.size == 2 =>
-        if (c.qualifiedName == "scala.Function1") args.headOption
-        else None
-      case _ => None
+      case FunctionType(_, Seq(paramTpe)) => Option(paramTpe)
+      case _                              => None
     }
 
-    function1Arg(left) match {
-      case Some(leftArg) => function1Arg(right) match {
-        case Some(rightArg) => rightArg.weakConforms(leftArg)
-        case _ => false
-      }
-      case _ => false
-    }
+    (for {
+      lhsParamTpe <- function1Arg(left)
+      rhsParamTpe <- function1Arg(right)
+    } yield rhsParamTpe.weakConforms(lhsParamTpe)).getOrElse(false)
   }
 }

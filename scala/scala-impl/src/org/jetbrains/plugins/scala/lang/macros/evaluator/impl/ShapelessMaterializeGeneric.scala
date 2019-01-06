@@ -18,7 +18,7 @@ object ShapelessMaterializeGeneric extends ScalaMacroTypeable with ShapelessUtil
 
   override def checkMacro(macros: ScFunction, context: MacroContext): Option[ScType] = {
     if (context.expectedType.isEmpty) return None
-    val targetType = extractTargetType(context)
+    val targetType  = extractTargetType(context)
     val fields      = extractFields(targetType).map(_._2)
     val reprTpStr   = hlistText(fields)
     val genericStr  = s"$fqGeneric.Aux[${targetType.canonicalText}, $reprTpStr]"

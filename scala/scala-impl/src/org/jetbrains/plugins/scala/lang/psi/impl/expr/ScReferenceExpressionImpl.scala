@@ -364,7 +364,7 @@ class ScReferenceExpressionImpl(node: ASTNode) extends ScReferenceElementImpl(no
         val maybeResult = fun.definedReturnType.toOption
         fun.polymorphicType(s, maybeResult)
       case result@ScalaResolveResult(fun: ScFunction, s) =>
-        fun.polymorphicType(s).updateTypeOfDynamicCall(result.isDynamic)
+        fun.polymorphicType(s).updateTypeOfSelectDynamicCall(result.nameArgForDynamic, fun)
       case ScalaResolveResult(param: ScParameter, s) if param.isRepeatedParameter =>
         val result = param.`type`()
         val computeType = s(result match {

@@ -4,10 +4,13 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.{PsiReference, ResolveResult}
 import org.jetbrains.plugins.scala.lang.psi.ElementScope
 import org.jetbrains.plugins.scala.lang.psi.api.expr._
+import org.jetbrains.plugins.scala.lang.psi.api.statements.{ScFunction, ScFunctionDefinition}
 import org.jetbrains.plugins.scala.lang.psi.impl.ScalaPsiElementFactory.createExpressionFromText
-import org.jetbrains.plugins.scala.lang.psi.types.ScType
+import org.jetbrains.plugins.scala.lang.psi.types.ScLiteralType.Kind
+import org.jetbrains.plugins.scala.lang.psi.types.{ScLiteralType, ScType}
 import org.jetbrains.plugins.scala.lang.psi.types.api.designator.ScDesignatorType
-import org.jetbrains.plugins.scala.lang.psi.types.nonvalue.{ScMethodType, ScTypePolymorphicType}
+import org.jetbrains.plugins.scala.lang.psi.types.nonvalue.{Parameter, ScMethodType, ScTypePolymorphicType}
+import org.jetbrains.plugins.scala.lang.psi.types.recursiveUpdate.ScSubstitutor
 import org.jetbrains.plugins.scala.lang.resolve.{DynamicTypeReferenceResolver, ScalaResolveResult}
 
 import scala.collection.JavaConverters
@@ -98,9 +101,29 @@ object DynamicResolveProcessor {
     case scType => scType
   }
 
-  implicit class ScTypeForDynamicProcessorEx(val tp: ScType) extends AnyVal {
+  implicit class ScTypeForDynamicProcessorEx(private val tp: ScType) extends AnyVal {
     def updateTypeOfDynamicCall(isDynamic: Boolean): ScType = if (isDynamic) getDynamicReturn(tp) else tp
-  }
 
+    /**
+      * This is a separate method, because `selectDynamic` calls are treated as a [[ScReferenceExpression]]
+      * and not [[MethodInvocation]], and thus dependently typed parameters are not instantiated to correct types.
+      * e.g.
+      * {{{
+      * trait Foo[A]
+      * trait Bar extends Dynamic {
+      *   def selectDynamic(s: String)(implicit val s: Foo[s.type]) = ???
+      * }
+      * }}}
+      * This pattern appears when using shapeless with dynamic (but verified via implicit search)
+      * selections on records.
+      */
+    def updateTypeOfSelectDynamicCall(namedDynamicArg: Option[String], target: ScFunction): ScType =
+      namedDynamicArg.fold(tp) { arg =>
+        val param    = Parameter(target.parameters.head)
+        val paramTpe = ScLiteralType(arg, Kind.String)(tp.projectContext)
+        val depSubst = ScSubstitutor.paramToType(Seq(param), Seq(paramTpe))
+        depSubst(getDynamicReturn(tp))
+      }
+  }
 }
 

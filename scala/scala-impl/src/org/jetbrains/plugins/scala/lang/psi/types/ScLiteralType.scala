@@ -50,13 +50,18 @@ class ScLiteralType private(val literalValue: Any, val kind: ScLiteralType.Kind,
       case Char => valueAs[Char]
     }
   }
+
+  def get: Any         = literalValue
+  def isEmpty: Boolean = false
+  def _1: Any          = literalValue
 }
 
 object ScLiteralType {
+  def unapply(tpe: ScLiteralType): ScLiteralType = tpe
 
   import LiteralEvaluationUtil._
 
-  sealed class Kind
+  sealed trait Kind
 
   object Kind {
 
@@ -78,7 +83,7 @@ object ScLiteralType {
 
   }
 
-  private def fromValue(literalValue: Any)(implicit projectContext: ProjectContext): Option[ScLiteralType] = literalValue match {
+  def fromValue(literalValue: Any)(implicit projectContext: ProjectContext): Option[ScLiteralType] = literalValue match {
     case _: Boolean => Some(apply(literalValue, Kind.Boolean))
     case _: String => Some(apply(literalValue, Kind.String))
     case _: Symbol => Some(apply(literalValue, Kind.Symbol))

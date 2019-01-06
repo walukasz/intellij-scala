@@ -21,7 +21,9 @@ import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiNamedElement
 import org.jetbrains.plugins.scala.components.libextensions.LibraryExtensionsManager
 import org.jetbrains.plugins.scala.lang.macros.MacroDef
+import org.jetbrains.plugins.scala.lang.macros.evaluator.MacroEvaluationError.{MacroCheckFailed, NoRuleDefined}
 import org.jetbrains.plugins.scala.lang.macros.evaluator.impl._
+import org.jetbrains.plugins.scala.lang.macros.evaluator.impl.records._
 import org.jetbrains.plugins.scala.lang.psi.api.expr.ScExpression
 import org.jetbrains.plugins.scala.lang.psi.api.statements.ScFunction
 import org.jetbrains.plugins.scala.lang.psi.types.ScType
@@ -52,9 +54,11 @@ class ScalaMacroEvaluator(project: Project) extends ProjectComponent {
       external.flatMap(p => p.boundMacro.map(_ -> p)).toMap
   }
 
-  def checkMacro(named: PsiNamedElement, context: MacroContext): Option[ScType] = {
-    macroSupport(named, typingRules).flatMap {
-      case (m, x) => x.checkMacro(m, context)
+  def checkMacro(named: PsiNamedElement, context: MacroContext): Either[MacroEvaluationError, ScType] = {
+    val macroRule = macroSupport(named, typingRules)
+    macroRule match {
+      case Some((m, rule)) => rule.checkMacro(m, context).map(Right(_)).getOrElse(Left(MacroCheckFailed))
+      case None            => Left(NoRuleDefined)
     }
   }
 
@@ -92,12 +96,22 @@ object ScalaMacroEvaluator {
     ShapelessForProduct,
     ShapelessMaterializeGeneric,
     ShapelessDefaultSymbolicLabelling,
+    ShapelessWitnessSelectDynamic,
+    ShapelessSingletonOps,
+    ShapelessMkWitness,
+    ShapelessLacksKey,
+    ShapelessMkModifier,
+    ShapelessMkRemover,
     ShapelessMkSelector,
-    ShapelessWitnessSelectDynamic
+    ShapelessMkUpdater,
+    ShapelessMaterializeNat,
+    ShapelessRecordSelectDynamic
   )
 
   val defaultExprProviders = Seq(
-    ShapelessProductArgs
+    ShapelessProductArgs,
+    ShapelessRecordApplyDynamic,
+    ShapelessRecordApplyDynamicNamed
   )
 }
 

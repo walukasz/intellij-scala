@@ -363,7 +363,6 @@ object ScExpression {
 
             val valueType =
               nonValueType
-                .widenLiteralType(expr, expected)
                 .updateWithExpected(expr, expected, fromUnderscore)
                 .dropMethodTypeEmptyParams(expr, expected)
                 .inferValueType

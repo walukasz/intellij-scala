@@ -183,8 +183,8 @@ object InferUtil {
         }
         val evaluator = ScalaMacroEvaluator.getInstance(project)
         evaluator.checkMacro(results.head.getElement, MacroContext(place, Some(paramType))) match {
-          case Some(tp) => exprs += new Expression(tp)
-          case None => updateExpr()
+          case Right(tp) => exprs += new Expression(tp)
+          case _         => updateExpr()
         }
         paramsForInfer += param
       } else {
